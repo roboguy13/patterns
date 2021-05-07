@@ -6,8 +6,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 
-import           Data.Functor.Foldable
+import           Control.Applicative
 import           Data.Kind
+
+import           ERep
 
 -- | Like the pattern combinators from Mark Tullsen's First Class Patterns
 -- paper
@@ -33,7 +35,7 @@ data ADT t where
 
   -- Rec :: ADT (RecLayer ADT [a]) -> ADT [a]
 
-  Rec :: ((a --> b) -> (a --> b)) -> ADT (PatFn a b)
+  Rec :: ERepTy a ~ a => ((a --> b) -> (a --> b)) -> ADT (PatFn a b)
 
 type x --> y = ADT (PatFn (ERepTy x) y)
 
@@ -52,11 +54,11 @@ data Pattern f s t where
 (.|) :: ADT (PatFn (Either a b) r) -> ADT (PatFn (Either a b) r) -> ADT (PatFn (Either a b) r)
 (.|) = (:|)
 
-type family ERepTy t
-type instance ERepTy [a] = Either () (a, [a])
-type instance ERepTy (a, b) = (a, b)
-type instance ERepTy (Either a b) = Either a b
-type instance ERepTy () = ()
+-- type family ERepTy t
+-- type instance ERepTy [a] = Either () (a, [a])
+-- type instance ERepTy (a, b) = (a, b)
+-- type instance ERepTy (Either a b) = Either a b
+-- type instance ERepTy () = ()
 
 --NilPat :: Pattern f (f (Either t b2))
 -- pattern NilPat :: Pattern ADT (ADT (Either () (a, [a]))) ()
@@ -75,12 +77,42 @@ adtSum = Rec $ \rec ->
   -- (ConsPat .-> \(x, xs) -> Add x (Apply rec xs)) .|
   -- (NilPat  .-> \()      -> Value 0)
 
--- runMatch :: ([a] --> b) -> ADT [a] -> ADT b
-runMatch :: ADT (PatFn (ERepTy [a]) b) -> ADT [a] -> ADT b
--- runMatch = undefined
-runMatch (CompPat InLPat BasePat :-> f) Nil' = f ()
--- runMatch (ConsPat :-> f) (Cons' x xs) = undefined --f (Right (x, xs))
-runMatch (ConsPat :-> f) (Cons' x xs) = f (x, xs)
+runMatch :: ([a] --> b) -> ADT [a] -> Maybe (ADT b)
+runMatch (NilPat  :-> f) Nil' = Just $ f ()
+runMatch (ConsPat :-> f) (Cons' x xs) = Just $ f (x, xs)
+runMatch (x :| y) arg = runMatch x arg <|> runMatch y arg
+
+runMatch (Rec f) arg = error "runMatch: Rec" -- TODO: Find a way to do this better
+runMatch (Apply f x) arg = error "runMatch: Apply"
+-- runMatch (Rec f) arg = do
+--   x <-
+
+runMatch _ _ = Nothing
+
+runMatch' :: (a --> b) -> ADT a -> Maybe (ADT b)
+-- runMatch' :: ADT (PatFn (ERepTy a) r) -> a -> Maybe (ADT r)
+runMatch' = undefined
+
+-- runMatch' :: ([a] --> b) -> ADT [a] -> ADT b
+-- runMatch' m x =
+--   case runMatch m x of
+--     Nothing -> error "runMatch': No matching pattern"
+--     Just r -> r
+
+listToCanonical :: [Int] -> ERepTy [Int]
+listToCanonical [] = Left ()
+listToCanonical (x:xs) = Right (x, xs)
+
+eval :: ADT a -> a
+eval (Value x) = x
+eval (Add x y) = eval x + eval y
+eval x@(Rec f) = eval (f x)
+eval x@(_ :| _) = PatFn $ \z -> eval <$> runMatch' x (Value z) -- TODO: Replace Value with something better
+-- eval x@(_ :-> _) = PatFn $ \z -> eval <$> (runMatch' x z)
+-- eval (Apply f x) = error "Apply"
+
+testList :: ADT [Int]
+testList = Cons' (Value 1) (Cons' (Value 2) (Cons' (Value 3) Nil'))
 
 -- runMatch (NilPat  :-> f) Nil' = f (Left ())
 -- runMatch (ConsPat :-> f) (Cons' x xs) = f (Right (x, xs))
