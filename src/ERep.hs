@@ -23,7 +23,6 @@ class ERep t where
   default unrep :: (Generic t, ERep (Rep t Void), ERepTy t ~ ERepTy (Rep t Void)) => ERepTy t -> t
   unrep = (to :: Rep t Void -> t) . unrep
 
--- type IsCanonical a = ERepTy (ERepTy a) ~ ERepTy a
 type ERepTyIdem a = ERepTy (ERepTy a) ~ ERepTy a
 type IsCanonical a = ERepTy a ~ a
 

@@ -15,9 +15,7 @@ newtype PatFn a b = PatFn { runPatFn :: a -> Maybe b }
 
 -- | Non-nested patterns ("simple patterns")
 data Pattern f s t where
-  -- BasePat :: Pattern f (f a) (f a)
   BasePat :: Pattern f (f a) a
-  -- UnitPat :: Pattern f (f ()) ()
   PairPat :: Pattern f (f (a, b)) (f a, f b)
   InLPat :: Pattern f (f (Either a b)) (f a)
   InRPat :: Pattern f (f (Either a b)) (f b)

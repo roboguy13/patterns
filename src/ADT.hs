@@ -47,15 +47,6 @@ type x --> y = ADT (PatFn x y)
 pattern NilPat  = CompPat InLPat BasePat
 pattern ConsPat = CompPat InRPat PairPat
 
-instance ERep (ADT a) where
-  type ERepTy (ADT a) = a
-  rep = undefined
-  unrep = undefined
-
-type family ADTConstraint t where
-  ADTConstraint (ADT a) = ADT a ~ ADT a
-  ADTConstraint t = DSL ADT t
-
 class ERep t => DSL f t where
   toDSL :: ERepTy t -> f t
   dslEmbed :: f t -> f (ERepTy t)
@@ -63,17 +54,11 @@ class ERep t => DSL f t where
   default dslEmbed :: ERepTy t ~ t => f t -> f (ERepTy t)
   dslEmbed = id
 
--- instance DSL ADT (ADT a) where dslEmbed = undefined
-
 instance DSL ADT Int where
   toDSL = Lit
 
 instance DSL ADT () where
   toDSL _ = Unit
-
--- instance (DSL ADT a) => DSL ADT (ADT a) where
---   toDSL = _
---   dslEmbed = undefined
 
 instance (DSL ADT a, DSL ADT b) => DSL ADT (a, b) where
   toDSL (x, y) = Pair (toDSL (rep x)) (toDSL (rep y))
@@ -111,49 +96,14 @@ fromPattern _ _ = Nothing
 
 matchPattern :: Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT s -> Maybe (ADT r)
 matchPattern pat f arg = f <$> fromPattern pat arg
--- matchPattern BasePat f arg = Just $ f (eval arg)
--- matchPattern PairPat f (Pair x y) = Just $ f (x, y)
--- matchPattern InLPat  f (InL x) = Just $ f x
--- matchPattern InRPat  f (InR y) = Just $ f y
--- matchPattern (CompPat p q) f arg = --undefined
---   case matchPattern p f arg of
---     _ -> undefined
 
 runMatch :: (DSL ADT a, DSL ADT b, IsCanonical a) => ADT (PatFn a b) -> ADT a -> Maybe b
 runMatch (pat :-> f) arg = eval <$> matchPattern pat f arg
 runMatch (p :| q) arg = runMatch p arg <|> runMatch q arg
 
--- runMatch :: (DSL ADT a, DSL ADT b) => (a --> b) -> ADT a -> Maybe b
--- runMatch :: (DSL ADT a, DSL ADT b, IsCanonical a) => ADT (PatFn a b) -> ADT a -> Maybe b
--- runMatch (BasePat :-> f) arg = Just $ eval $ f (eval arg)
--- runMatch (PairPat :-> f) arg =
---   case dslEmbed arg of
---     Pair x y -> Just $ eval $ f (x, y)
---     _ -> Nothing
-
--- runMatch (InLPat :-> f) arg =
---   case dslEmbed arg of
---     InL x -> Just $ eval $ f x
---     _ -> Nothing
-
--- runMatch (InRPat :-> f) arg =
---   case dslEmbed arg of
---     InR y -> Just $ eval $ f y
---     _ -> Nothing
-
--- runMatch (CompPat InLPat InRPat :-> f) arg =
---   case dslEmbed arg of
---     InL x -> runMatch (InRPat :-> f) x
-
--- runMatch (p :| q) arg = runMatch p arg <|> runMatch q arg
--- runMatch (_ :-> _) _ = error "runMatch" --Nothing
--- runMatch f x = Just $ eval (Apply f x)
-
 listToCanonical :: [Int] -> ERepTy [Int]
 listToCanonical [] = Left ()
 listToCanonical (x:xs) = Right (x, xs)
-
--- eval = undefined
 
 eval :: forall a. ADT a -> a
 eval (Lit x) = x
