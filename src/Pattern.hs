@@ -18,12 +18,19 @@ data ADT t where
 
   Add :: ADT Int -> ADT Int -> ADT Int
 
+  (:->) :: Match ADT s t -> (t -> ADT r) -> ADT (Pat t r)
+  (:|) :: ADT (Pat a r) -> ADT (Pat b r) -> ADT (Pat (Either a b) r)
+
+  Apply :: (a --> b) -> ADT a -> ADT b
+
   Nil' :: ADT [a]
   Cons' :: ADT a -> RecLayer ADT [a] -> ADT [a]
 
   -- Match :: ADT t ->
 
   Rec :: ADT (RecLayer ADT [a]) -> ADT [a]
+
+type x --> y = ADT (Pat (ERepTy x) y)
 
 -- data ADTMatch (p :: Type -> Type -> Type) a b where
 --   ADTMatchPair :: ADTMatch (,) a b
@@ -42,19 +49,19 @@ data Match f s t where
 --   PairMatch :: Pai
 
 -- | Similar to Mark Tullsen's First Class Patterns paper
-(.->) :: Match ADT s t -> (t -> ADT r) -> ADT (t -> Maybe r)
+(.->) :: Match ADT s t -> (t -> ADT r) -> ADT (Pat t r)
 (.->) = undefined
 
-(.|) :: ADT (a -> Maybe r) -> ADT (b -> Maybe r) -> ADT (Either a b -> Maybe r)
+(.|) :: ADT (Pat a r) -> ADT (Pat b r) -> ADT (Pat (Either a b) r)
 (.|) = undefined
 
 type family ERepTy t
 type instance ERepTy [a] = Either () (ADT a, ADT [a])
 -- type instance ERepTy (ADT [a]) = ADT (Either () (a, ADT [a]))
 
-adtSum :: ADT (ERepTy [Int] -> Maybe Int)
+adtSum :: [Int] --> Int
 adtSum = (MatchComp MatchInL MatchBase .-> \() -> Value 0)
-          .| (MatchComp MatchInR MatchPair .-> \(x, xs) -> Add x _)
+          .| (MatchComp MatchInR MatchPair .-> \(x, xs) -> Add x (Apply adtSum xs))
 
 
 -- This is @Free@
