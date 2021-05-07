@@ -41,12 +41,6 @@ data ADT t where
 
 type x --> y = ADT (PatFn (ERepTy x) y)
 
--- (.->) :: (DSL ADT s) => Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
--- (.->) = (:->)
-
--- (.|) :: (Either a b --> r) -> (Either a b --> r) -> (Either a b --> r)
--- (.|) = (:|)
-
 -- TODO: Look into using Template Haskell to automatically generate pattern
 -- synonyms like these
 pattern NilPat  = InLPat
@@ -84,9 +78,6 @@ adtSum = Rec $ \rec ->
   (NilPat  :-> \Unit    -> Lit 0) :|
   (ConsPat :-> \(x, xs) -> Add x (Apply rec xs))
 
--- adtRep :: ERep a => ADT a -> ADT (ERepTy a)
--- adtRep =
-
 -- runMatch :: (DSL ADT a, DSL ADT b) => (a --> b) -> ADT a -> Maybe b
 runMatch :: (DSL ADT a, DSL ADT b) => ADT (PatFn (ERepTy a) b) -> ADT a -> Maybe b
 runMatch (BasePat :-> f) arg = Just $ eval $ f (dslEmbed arg)
@@ -108,30 +99,6 @@ runMatch (InRPat :-> f) arg =
 runMatch (p :| q) arg = runMatch p arg <|> runMatch q arg
 runMatch _ _ = Nothing
 
-{-
-runMatch :: ([a] --> b) -> ADT [a] -> Maybe (ADT b)
-runMatch (NilPat  :-> f) Nil         = Just $ f (Value ())
-runMatch (ConsPat :-> f) (Cons x xs) = Just $ f (x, xs)
-runMatch (x :| y)        arg         = runMatch x arg <|> runMatch y arg
-
-runMatch (Rec f) arg = error "runMatch: Rec" -- TODO: Find a way to do this better
-runMatch (Apply f x) arg = error "runMatch: Apply"
--}
--- runMatch (Rec f) arg = do
---   x <-
-
--- runMatch _ _ = Nothing
-
--- runMatch' :: (a --> b) -> ADT a -> Maybe (ADT b)
--- -- runMatch' :: ADT (PatFn (ERepTy a) r) -> a -> Maybe (ADT r)
--- runMatch' = undefined
-
--- runMatch' :: ([a] --> b) -> ADT [a] -> ADT b
--- runMatch' m x =
---   case runMatch m x of
---     Nothing -> error "runMatch': No matching pattern"
---     Just r -> r
-
 listToCanonical :: [Int] -> ERepTy [Int]
 listToCanonical [] = Left ()
 listToCanonical (x:xs) = Right (x, xs)
@@ -141,22 +108,9 @@ eval (Lit x) = x
 eval (Add x y) = eval x + eval y
 eval x@(Rec f) = eval (f x)
 eval x@(_ :| _) = PatFn $ \z -> runMatch x (toDSL z)
-{-
-eval (Value x) = x
-eval (Add x y) = eval x + eval y
-eval x@(Rec f) = eval (f x)
-eval x@(_ :| _) = PatFn $ \z -> eval <$> runMatch' x (Value z) -- TODO: Replace Value with something better
--}
-
-
--- eval x@(_ :-> _) = PatFn $ \z -> eval <$> (runMatch' x z)
--- eval (Apply f x) = error "Apply"
 
 testList :: ADT [Int]
 testList = Cons (Lit 1) (Cons (Lit 2) (Cons (Lit 3) Nil))
-
--- runMatch (NilPat  :-> f) Nil' = f (Left ())
--- runMatch (ConsPat :-> f) (Cons' x xs) = f (Right (x, xs))
 
 -- lookupMatch :: Pattern ADT s t -> (t --> r) -> (
 
