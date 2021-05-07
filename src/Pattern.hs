@@ -20,6 +20,7 @@ data ADT t where
 
   Add :: ADT Int -> ADT Int -> ADT Int
 
+  -- | Similar to Mark Tullsen's First Class Patterns paper
   (:->) :: Pattern ADT s t -> (t -> ADT r) -> ADT (PatFn t r)
   (:|) :: ADT (PatFn a r) -> ADT (PatFn b r) -> ADT (PatFn (Either a b) r)
 
@@ -54,12 +55,11 @@ data Pattern f s t where
 -- data Match t where
 --   PairMatch :: Pai
 
--- | Similar to Mark Tullsen's First Class Patterns paper
 (.->) :: Pattern ADT s t -> (t -> ADT r) -> ADT (PatFn t r)
-(.->) = undefined
+(.->) = (:->)
 
 (.|) :: ADT (PatFn a r) -> ADT (PatFn b r) -> ADT (PatFn (Either a b) r)
-(.|) = undefined
+(.|) = (:|)
 
 type family ERepTy t
 type instance ERepTy [a] = Either () (ADT a, ADT [a])
