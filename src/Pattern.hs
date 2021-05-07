@@ -15,11 +15,13 @@ newtype PatFn a b = PatFn { runPatFn :: a -> Maybe b }
 
 -- | Non-nested patterns ("simple patterns")
 data Pattern f s t where
-  BasePat :: Pattern f (f a) (f a)
+  -- BasePat :: Pattern f (f a) (f a)
+  BasePat :: Pattern f (f a) a
+  -- UnitPat :: Pattern f (f ()) ()
   PairPat :: Pattern f (f (a, b)) (f a, f b)
   InLPat :: Pattern f (f (Either a b)) (f a)
   InRPat :: Pattern f (f (Either a b)) (f b)
-  CompPat :: Pattern f a b -> Pattern f b c -> Pattern f a c
+  CompPat :: Pattern f a (f b) -> Pattern f (f b) c -> Pattern f a c
   -- MatchRec :: ... ?
 
 data SomePattern f s = forall t. SomePattern (Pattern f s t)
