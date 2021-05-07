@@ -19,6 +19,8 @@ import           GHC.Generics
 import           ERep
 import           Pattern
 
+data Match s t
+
 data ADT t where
   Lit :: Int -> ADT Int
   Add :: ADT Int -> ADT Int -> ADT Int
@@ -29,8 +31,11 @@ data ADT t where
   InR :: forall a b. ADT b -> ADT (Either a b)
 
   -- | Similar to Mark Tullsen's First Class Patterns paper
-  (:->) :: ({- ADTConstraint t, -} DSL ADT s, DSL ADT r, IsCanonical s) => Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
-  (:|) :: (DSL ADT a, DSL ADT b, DSL ADT r, IsCanonical a, IsCanonical b, IsCanonical (Either a b)) => ((Either a b) --> r) -> ((Either a b) --> r) -> ((Either a b) --> r)
+  (:->) :: (DSL ADT s, DSL ADT r, IsCanonical s) =>
+    Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
+
+  (:|) :: (DSL ADT a, DSL ADT b, DSL ADT r) =>
+    ((Either a b) --> r) -> ((Either a b) --> r) -> ((Either a b) --> r)
 
   Apply :: ERep a => (ERepTy a --> b) -> ADT a -> ADT b
 
@@ -76,12 +81,12 @@ instance (DSL ADT a, ERep a) => DSL ADT [a] where
 
 adtSum :: ERepTy [Int] --> Int
 adtSum = Rec $ \rec ->
-  (NilPat  :-> \()    -> Lit 0) :|
+  (NilPat  :-> \()      -> Lit 0) :|
   (ConsPat :-> \(x, xs) -> Add x (Apply rec xs))
 
 listToInt :: ERepTy [Int] --> Int
 listToInt =
-  (NilPat  :-> \()  -> Lit 0) :|
+  (NilPat  :-> \()    -> Lit 0) :|
   (ConsPat :-> \(_,_) -> Lit 1)
 
 fromPattern :: Pattern ADT (ADT s) t -> ADT s -> Maybe t
