@@ -5,9 +5,15 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 import           Control.Applicative
 import           Data.Kind
+
+import           GHC.Generics
 
 import           ERep
 
@@ -39,13 +45,48 @@ data ADT t where
 
 type x --> y = ADT (PatFn (ERepTy x) y)
 
+-- | Non-nested patterns ("simple patterns")
 data Pattern f s t where
-  BasePat :: Pattern f (f a) a
+  BasePat :: Pattern f (f a) (f a)
   PairPat :: Pattern f (f (a, b)) (f a, f b)
   InLPat :: Pattern f (f (Either a b)) (f a)
   InRPat :: Pattern f (f (Either a b)) (f b)
   CompPat :: Pattern f a b -> Pattern f b c -> Pattern f a c
   -- MatchRec :: ... ?
+
+data SomePattern f s = forall t. SomePattern (Pattern f s t)
+
+someInLPat :: forall f a b. SomePattern f (f a) -> SomePattern f (f (Either a b))
+someInLPat (SomePattern p) = SomePattern (CompPat InLPat p)
+
+someInRPat :: forall f a b. SomePattern f (f b) -> SomePattern f (f (Either a b))
+someInRPat (SomePattern p) = SomePattern (CompPat InRPat p)
+
+somePairPat :: forall f a b. SomePattern f (f a) -> SomePattern f (f b) -> SomePattern f (f (a, b))
+somePairPat (SomePattern p) (SomePattern q) = SomePattern PairPat
+
+-- TODO: Use this type to test things out
+data Three a = Three a a a deriving (Generic)
+instance ERep a => ERep (Three a)
+
+class GetPatterns f a where
+  getPatterns' :: [SomePattern f (f a)]
+
+instance GetPatterns f () where
+  getPatterns' = [SomePattern BasePat]
+
+instance (GetPatterns f a, GetPatterns f b) => GetPatterns f (Either a b) where
+  getPatterns' = map someInLPat (getPatterns' @f @a)
+                ++ map someInRPat (getPatterns' @f @b)
+
+instance (GetPatterns f a, GetPatterns f b) => GetPatterns f (a, b) where
+  getPatterns' = [SomePattern PairPat]
+
+instance {-# OVERLAPPABLE #-} GetPatterns f a where
+  getPatterns' = []
+
+getPatterns :: forall f a. (GetPatterns f (ERepTy a), ERep a) => [SomePattern f (f (ERepTy a))]
+getPatterns = getPatterns'
 
 (.->) :: Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
 (.->) = (:->)
@@ -62,7 +103,7 @@ data Pattern f s t where
 
 --NilPat :: Pattern f (f (Either t b2))
 -- pattern NilPat :: Pattern ADT (ADT (Either () (a, [a]))) ()
-pattern NilPat  = CompPat InLPat BasePat
+pattern NilPat  = InLPat
 
 --Pattern f (f (Either (a2, b3) b2)) (f a2, f b3)
 --Pattern f (f (Either a1 (a2, b3))) (f a2, f b3)
@@ -71,14 +112,14 @@ pattern ConsPat = CompPat InRPat PairPat
 
 adtSum :: [Int] --> Int
 adtSum = Rec $ \rec ->
-  (NilPat  .-> \()      -> Value 0) .|
-  (ConsPat .-> \(x, xs) -> Add x (Apply rec xs))
+  (NilPat  .-> \(Value ()) -> Value 0) .|
+  (ConsPat .-> \(x, xs)    -> Add x (Apply rec xs))
 
   -- (ConsPat .-> \(x, xs) -> Add x (Apply rec xs)) .|
   -- (NilPat  .-> \()      -> Value 0)
 
 runMatch :: ([a] --> b) -> ADT [a] -> Maybe (ADT b)
-runMatch (NilPat  :-> f) Nil' = Just $ f ()
+runMatch (NilPat  :-> f) Nil' = Just $ f (Value ())
 runMatch (ConsPat :-> f) (Cons' x xs) = Just $ f (x, xs)
 runMatch (x :| y) arg = runMatch x arg <|> runMatch y arg
 
