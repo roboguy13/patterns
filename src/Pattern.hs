@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 import           Data.Functor.Foldable
 import           Data.Kind
@@ -29,7 +30,11 @@ data ADT t where
 
   -- Match :: ADT t ->
 
-  Rec :: ADT (RecLayer ADT [a]) -> ADT [a]
+  -- Rec :: ADT (RecLayer ADT [a]) -> ADT [a]
+
+  TailRec :: ((a --> b) -> (a --> b)) -> ADT (PatFn a b)
+
+  -- TailRec :: ((a --> b) -> (a --> b)) -> (a --> b)
 
 type x --> y = ADT (PatFn (ERepTy x) y)
 
@@ -58,15 +63,18 @@ data Pattern f s t where
 
 type family ERepTy t
 type instance ERepTy [a] = Either () (ADT a, ADT [a])
+type instance ERepTy (a, b) = (a, b)
+type instance ERepTy (Either a b) = Either a b
+type instance ERepTy () = ()
 -- type instance ERepTy (ADT [a]) = ADT (Either () (a, ADT [a]))
 
 pattern NilPat  = CompPat InLPat BasePat
 pattern ConsPat = CompPat InRPat PairPat
 
 adtSum :: [Int] --> Int
-adtSum =
+adtSum = TailRec $ \rec ->
   (NilPat  .-> \()      -> Value 0) .|
-  (ConsPat .-> \(x, xs) -> Add x (Apply adtSum xs))
+  (ConsPat .-> \(x, xs) -> Add x (Apply rec xs))
 
 
 -- This is @Free@
