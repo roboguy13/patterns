@@ -14,9 +14,9 @@ newtype PatFn a b = PatFn { runPatFn :: a -> Maybe b }
 
 data ADT t where
   Value :: t -> ADT t
-  Pair :: ADT a -> ADT b -> ADT (a, b)
-  InL :: forall a b. ADT a -> ADT (Either a b)
-  InR :: forall a b. ADT b -> ADT (Either a b)
+  -- Pair :: ADT a -> ADT b -> ADT (a, b)
+  -- InL :: forall a b. ADT a -> ADT (Either a b)
+  -- InR :: forall a b. ADT b -> ADT (Either a b)
 
   Add :: ADT Int -> ADT Int -> ADT Int
 
@@ -27,22 +27,13 @@ data ADT t where
   Apply :: (a --> b) -> ADT a -> ADT b
 
   Nil' :: ADT [a]
-  Cons' :: ADT a -> RecLayer ADT [a] -> ADT [a]
-
-  -- Match :: ADT t ->
+  Cons' :: ADT a -> ADT [a] -> ADT [a]
 
   -- Rec :: ADT (RecLayer ADT [a]) -> ADT [a]
 
   TailRec :: ((a --> b) -> (a --> b)) -> ADT (PatFn a b)
 
-  -- TailRec :: ((a --> b) -> (a --> b)) -> (a --> b)
-
 type x --> y = ADT (PatFn (ERepTy x) y)
-
--- data ADTMatch (p :: Type -> Type -> Type) a b where
---   ADTMatchPair :: ADTMatch (,) a b
---   ADTMatchInL :: ADTMatch Either a b
---   -- ADTMatchRec ... ?
 
 data Pattern f s t where
   BasePat :: Pattern f (f a) a
@@ -51,9 +42,6 @@ data Pattern f s t where
   InRPat :: Pattern f (f (Either a b)) (f a)
   CompPat :: Pattern f a b -> Pattern f b c -> Pattern f a c
   -- MatchRec :: ... ?
-
--- data Match t where
---   PairMatch :: Pai
 
 (.->) :: Pattern ADT s t -> (t -> ADT r) -> ADT (PatFn t r)
 (.->) = (:->)
@@ -66,7 +54,6 @@ type instance ERepTy [a] = Either () (ADT a, ADT [a])
 type instance ERepTy (a, b) = (a, b)
 type instance ERepTy (Either a b) = Either a b
 type instance ERepTy () = ()
--- type instance ERepTy (ADT [a]) = ADT (Either () (a, ADT [a]))
 
 pattern NilPat  = CompPat InLPat BasePat
 pattern ConsPat = CompPat InRPat PairPat
@@ -76,54 +63,17 @@ adtSum = TailRec $ \rec ->
   (NilPat  .-> \()      -> Value 0) .|
   (ConsPat .-> \(x, xs) -> Add x (Apply rec xs))
 
+runMatch :: ([a] --> b) -> ADT [a] -> ADT b
+runMatch (CompPat InLPat BasePat :-> f) Nil' = f (Left ())
+runMatch (CompPat InRPat PairPat :-> f) (Cons' x xs) = f (Right (x, xs))
+
+-- runMatch (NilPat  :-> f) Nil' = f (Left ())
+-- runMatch (ConsPat :-> f) (Cons' x xs) = f (Right (x, xs))
+
+-- lookupMatch :: Pattern ADT s t -> (t --> r) -> (
 
 -- This is @Free@
 data RecLayer f a where
   Unwrap :: a -> RecLayer f a
   Preserve :: f (RecLayer f a) -> RecLayer f a
-
--- view :: ADT t -> RecLayer ADT t
--- view = undefined
-
--- adtSum :: RecLayer ADT t -> ADT Int
--- adtSum (Unwrap _) = Value 0
--- adtSum (Preserve (Cons' x xs)) = Add (adtSum (_ x)) undefined
-
--- adtSum :: ADT [Int] -> ADT Int
--- adtSum Nil' = Value 0
--- adtSum (Cons' x xs) = Add x (adtSum (Rec _))
-
-{-
-
--- transformListMatch :: ([ADT a] -> r) -> ADT [a] -> r
--- transformListMatch = undefined
-
--- transformListMatch :: ([a] -> r) -> ListF a (RecLayer (ListF a) a) -> r
--- transformListMatch = undefined
-
-transformPairMatch :: ((ADT x, ADT y) -> r) -> ADT (x, y) -> r
-transformPairMatch f (Pair x y) = f (x, y)
-
--- | This is making the decision at the "wrong time" (at EDSL "compilation"
--- time rather than "runtime" in the evaluation function)?
-transformSumMatch :: (Either (ADT x) (ADT y) -> r) -> ADT (Either x y) -> r
-transformSumMatch f (InL y) = f (Left y)
-transformSumMatch f (InR x) = f (Right x)
-
--- transformListMatch :: ([ADT a] -> r) -> ADT ? -> r
-
--- transformPairMatch :: ((f x, f y) -> r) -> f (x, y) -> r
--- transformPairMatch = undefined
-
-class Match f rep | f -> rep where
-  -- match :: f a -> rep a
-  matchPair :: f (x, y) -> ((f x, f y) -> r) -> r
-
-  mkPat :: f a -> Pat a (rep a)
-
-  pair :: forall x y. (f x, f y) -> f (x, y)
-  inL :: forall x y. f x -> f (Either x y)
-  inR :: forall x y. f y -> f (Either x y)
-
--}
 
