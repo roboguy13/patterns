@@ -2,13 +2,14 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 import           Data.Functor.Foldable
 import           Data.Kind
 
 -- | Like the pattern combinators from Mark Tullsen's First Class Patterns
 -- paper
-newtype Pat a b = Pat { runPat :: a -> Maybe b }
+newtype PatFn a b = PatFn { runPatFn :: a -> Maybe b }
 
 data ADT t where
   Value :: t -> ADT t
@@ -18,8 +19,8 @@ data ADT t where
 
   Add :: ADT Int -> ADT Int -> ADT Int
 
-  (:->) :: Match ADT s t -> (t -> ADT r) -> ADT (Pat t r)
-  (:|) :: ADT (Pat a r) -> ADT (Pat b r) -> ADT (Pat (Either a b) r)
+  (:->) :: Pattern ADT s t -> (t -> ADT r) -> ADT (PatFn t r)
+  (:|) :: ADT (PatFn a r) -> ADT (PatFn b r) -> ADT (PatFn (Either a b) r)
 
   Apply :: (a --> b) -> ADT a -> ADT b
 
@@ -30,38 +31,42 @@ data ADT t where
 
   Rec :: ADT (RecLayer ADT [a]) -> ADT [a]
 
-type x --> y = ADT (Pat (ERepTy x) y)
+type x --> y = ADT (PatFn (ERepTy x) y)
 
 -- data ADTMatch (p :: Type -> Type -> Type) a b where
 --   ADTMatchPair :: ADTMatch (,) a b
 --   ADTMatchInL :: ADTMatch Either a b
 --   -- ADTMatchRec ... ?
 
-data Match f s t where
-  MatchBase :: Match f (f a) a
-  MatchPair :: Match f (f (a, b)) (f a, f b)
-  MatchInL :: Match f (f (Either a b)) (f a)
-  MatchInR :: Match f (f (Either a b)) (f a)
-  MatchComp :: Match f a b -> Match f b c -> Match f a c
+data Pattern f s t where
+  BasePat :: Pattern f (f a) a
+  PairPat :: Pattern f (f (a, b)) (f a, f b)
+  InLPat :: Pattern f (f (Either a b)) (f a)
+  InRPat :: Pattern f (f (Either a b)) (f a)
+  CompPat :: Pattern f a b -> Pattern f b c -> Pattern f a c
   -- MatchRec :: ... ?
 
 -- data Match t where
 --   PairMatch :: Pai
 
 -- | Similar to Mark Tullsen's First Class Patterns paper
-(.->) :: Match ADT s t -> (t -> ADT r) -> ADT (Pat t r)
+(.->) :: Pattern ADT s t -> (t -> ADT r) -> ADT (PatFn t r)
 (.->) = undefined
 
-(.|) :: ADT (Pat a r) -> ADT (Pat b r) -> ADT (Pat (Either a b) r)
+(.|) :: ADT (PatFn a r) -> ADT (PatFn b r) -> ADT (PatFn (Either a b) r)
 (.|) = undefined
 
 type family ERepTy t
 type instance ERepTy [a] = Either () (ADT a, ADT [a])
 -- type instance ERepTy (ADT [a]) = ADT (Either () (a, ADT [a]))
 
+pattern NilPat  = CompPat InLPat BasePat
+pattern ConsPat = CompPat InRPat PairPat
+
 adtSum :: [Int] --> Int
-adtSum = (MatchComp MatchInL MatchBase .-> \() -> Value 0)
-          .| (MatchComp MatchInR MatchPair .-> \(x, xs) -> Add x (Apply adtSum xs))
+adtSum =
+  (NilPat  .-> \()      -> Value 0) .|
+  (ConsPat .-> \(x, xs) -> Add x (Apply adtSum xs))
 
 
 -- This is @Free@
