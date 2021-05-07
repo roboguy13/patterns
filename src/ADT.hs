@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 import           Control.Applicative
 import           Data.Kind
@@ -19,52 +20,111 @@ import           ERep
 import           Pattern
 
 data ADT t where
-  Value :: t -> ADT t
+  Lit :: Int -> ADT Int
   Add :: ADT Int -> ADT Int -> ADT Int
 
+  Unit :: ADT ()
+  Pair :: forall a b. ADT a -> ADT b -> ADT (a, b)
+  InL :: forall a b. ADT a -> ADT (Either a b)
+  InR :: forall a b. ADT b -> ADT (Either a b)
+
   -- | Similar to Mark Tullsen's First Class Patterns paper
-  (:->) :: Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
+  (:->) :: (DSL ADT s) => Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
   (:|) :: (Either a b --> r) -> (Either a b --> r) -> (Either a b --> r)
 
   Apply :: (a --> b) -> ADT a -> ADT b
 
-  Nil' :: ADT [a]
-  Cons' :: ADT a -> ADT [a] -> ADT [a]
+  Nil :: ADT [a]
+  Cons :: ADT a -> ADT [a] -> ADT [a]
 
   Rec :: ERepTy a ~ a => ((a --> b) -> (a --> b)) -> ADT (PatFn a b)
 
 type x --> y = ADT (PatFn (ERepTy x) y)
 
-(.->) :: Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
-(.->) = (:->)
+-- (.->) :: (DSL ADT s) => Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
+-- (.->) = (:->)
 
--- (.|) :: ADT (PatFn a r) -> ADT (PatFn b r) -> ADT (PatFn (Either a b) r)
-(.|) :: ADT (PatFn (Either a b) r) -> ADT (PatFn (Either a b) r) -> ADT (PatFn (Either a b) r)
-(.|) = (:|)
+-- (.|) :: (Either a b --> r) -> (Either a b --> r) -> (Either a b --> r)
+-- (.|) = (:|)
 
+-- TODO: Look into using Template Haskell to automatically generate pattern
+-- synonyms like these
 pattern NilPat  = InLPat
 pattern ConsPat = CompPat InRPat PairPat
 
+class ERep t => DSL f t where
+  toDSL :: ERepTy t -> f t
+  dslEmbed :: f t -> f (ERepTy t)
+
+  default dslEmbed :: ERepTy t ~ t => f t -> f (ERepTy t)
+  dslEmbed = id
+
+instance DSL ADT Int where
+  toDSL = Lit
+
+instance DSL ADT () where
+  toDSL _ = Unit
+
+instance (DSL ADT a, DSL ADT b) => DSL ADT (a, b) where
+  toDSL (x, y) = Pair (toDSL (rep x)) (toDSL (rep y))
+
+instance (DSL ADT a, DSL ADT b) => DSL ADT (Either a b) where
+  toDSL (Left x)  = InL (toDSL (rep x))
+  toDSL (Right y) = InR (toDSL (rep y))
+
+instance (DSL ADT a, ERep a) => DSL ADT [a] where
+  toDSL (Left ())       = Nil
+  toDSL (Right (x, xs)) = Cons (toDSL (rep x)) (toDSL (rep xs))
+
+  dslEmbed Nil = InL Unit
+  dslEmbed (Cons x xs) = InR (Pair x xs)
+
 adtSum :: [Int] --> Int
 adtSum = Rec $ \rec ->
-  (NilPat  .-> \(Value ()) -> Value 0) .|
-  (ConsPat .-> \(x, xs)    -> Add x (Apply rec xs))
+  (NilPat  :-> \Unit    -> Lit 0) :|
+  (ConsPat :-> \(x, xs) -> Add x (Apply rec xs))
 
+-- adtRep :: ERep a => ADT a -> ADT (ERepTy a)
+-- adtRep =
+
+-- runMatch :: (DSL ADT a, DSL ADT b) => (a --> b) -> ADT a -> Maybe b
+runMatch :: (DSL ADT a, DSL ADT b) => ADT (PatFn (ERepTy a) b) -> ADT a -> Maybe b
+runMatch (BasePat :-> f) arg = Just $ eval $ f (dslEmbed arg)
+runMatch (PairPat :-> f) arg =
+  case dslEmbed arg of
+    Pair x y -> Just $ eval $ f (x, y)
+    _ -> Nothing
+
+runMatch (InLPat :-> f) arg =
+  case dslEmbed arg of
+    InL x -> Just $ eval $ f x
+    _ -> Nothing
+
+runMatch (InRPat :-> f) arg =
+  case dslEmbed arg of
+    InR y -> Just $ eval $ f y
+    _ -> Nothing
+
+runMatch (p :| q) arg = runMatch p arg <|> runMatch q arg
+runMatch _ _ = Nothing
+
+{-
 runMatch :: ([a] --> b) -> ADT [a] -> Maybe (ADT b)
-runMatch (NilPat  :-> f) Nil' = Just $ f (Value ())
-runMatch (ConsPat :-> f) (Cons' x xs) = Just $ f (x, xs)
-runMatch (x :| y) arg = runMatch x arg <|> runMatch y arg
+runMatch (NilPat  :-> f) Nil         = Just $ f (Value ())
+runMatch (ConsPat :-> f) (Cons x xs) = Just $ f (x, xs)
+runMatch (x :| y)        arg         = runMatch x arg <|> runMatch y arg
 
 runMatch (Rec f) arg = error "runMatch: Rec" -- TODO: Find a way to do this better
 runMatch (Apply f x) arg = error "runMatch: Apply"
+-}
 -- runMatch (Rec f) arg = do
 --   x <-
 
-runMatch _ _ = Nothing
+-- runMatch _ _ = Nothing
 
-runMatch' :: (a --> b) -> ADT a -> Maybe (ADT b)
--- runMatch' :: ADT (PatFn (ERepTy a) r) -> a -> Maybe (ADT r)
-runMatch' = undefined
+-- runMatch' :: (a --> b) -> ADT a -> Maybe (ADT b)
+-- -- runMatch' :: ADT (PatFn (ERepTy a) r) -> a -> Maybe (ADT r)
+-- runMatch' = undefined
 
 -- runMatch' :: ([a] --> b) -> ADT [a] -> ADT b
 -- runMatch' m x =
@@ -76,16 +136,24 @@ listToCanonical :: [Int] -> ERepTy [Int]
 listToCanonical [] = Left ()
 listToCanonical (x:xs) = Right (x, xs)
 
-eval :: ADT a -> a
+eval :: forall a. ADT a -> a
+eval (Lit x) = x
+eval (Add x y) = eval x + eval y
+eval x@(Rec f) = eval (f x)
+eval x@(_ :| _) = PatFn $ \z -> runMatch x (toDSL z)
+{-
 eval (Value x) = x
 eval (Add x y) = eval x + eval y
 eval x@(Rec f) = eval (f x)
 eval x@(_ :| _) = PatFn $ \z -> eval <$> runMatch' x (Value z) -- TODO: Replace Value with something better
+-}
+
+
 -- eval x@(_ :-> _) = PatFn $ \z -> eval <$> (runMatch' x z)
 -- eval (Apply f x) = error "Apply"
 
 testList :: ADT [Int]
-testList = Cons' (Value 1) (Cons' (Value 2) (Cons' (Value 3) Nil'))
+testList = Cons (Lit 1) (Cons (Lit 2) (Cons (Lit 3) Nil))
 
 -- runMatch (NilPat  :-> f) Nil' = f (Left ())
 -- runMatch (ConsPat :-> f) (Cons' x xs) = f (Right (x, xs))

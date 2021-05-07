@@ -2,6 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module ERep where
 
@@ -21,6 +22,8 @@ class ERep t where
 
   default unrep :: (Generic t, ERep (Rep t Void), ERepTy t ~ ERepTy (Rep t Void)) => ERepTy t -> t
   unrep = (to :: Rep t Void -> t) . unrep
+
+type IsCanonical a = ERepTy (ERepTy a) ~ ERepTy a
 
 instance ERep () where
   type ERepTy () = ()
