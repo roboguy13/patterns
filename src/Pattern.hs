@@ -53,7 +53,7 @@ data Pattern f s t where
 (.|) = (:|)
 
 type family ERepTy t
-type instance ERepTy [a] = Either () (a, ADT [a])
+type instance ERepTy [a] = Either () (a, [a])
 type instance ERepTy (a, b) = (a, b)
 type instance ERepTy (Either a b) = Either a b
 type instance ERepTy () = ()
@@ -70,17 +70,17 @@ pattern ConsPat = CompPat InRPat PairPat
 adtSum :: [Int] --> Int
 adtSum = Rec $ \rec ->
   (NilPat  .-> \()      -> Value 0) .|
-  (ConsPat .-> \(x, xs) -> Add x (Apply undefined xs))
+  (ConsPat .-> \(x, xs) -> Add x (Apply rec xs))
 
   -- (ConsPat .-> \(x, xs) -> Add x (Apply rec xs)) .|
   -- (NilPat  .-> \()      -> Value 0)
 
 -- runMatch :: ([a] --> b) -> ADT [a] -> ADT b
-runMatch :: ERepTy [a] ~ Either () (ADT a, ADT [a]) => ADT (PatFn (ERepTy [a]) b) -> ADT [a] -> ADT b
-runMatch = undefined
--- runMatch (CompPat InLPat BasePat :-> f) Nil' = f (Left ())
--- runMatch (ConsPat :-> f) (Cons' x xs) = _ --f (Right (x, xs))
--- runMatch (ConsPat :-> f) (Cons' x xs) = f (x, xs)
+runMatch :: ADT (PatFn (ERepTy [a]) b) -> ADT [a] -> ADT b
+-- runMatch = undefined
+runMatch (CompPat InLPat BasePat :-> f) Nil' = f ()
+-- runMatch (ConsPat :-> f) (Cons' x xs) = undefined --f (Right (x, xs))
+runMatch (ConsPat :-> f) (Cons' x xs) = f (x, xs)
 
 -- runMatch (NilPat  :-> f) Nil' = f (Left ())
 -- runMatch (ConsPat :-> f) (Cons' x xs) = f (Right (x, xs))
