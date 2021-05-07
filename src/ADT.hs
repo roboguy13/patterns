@@ -30,7 +30,7 @@ data ADT t where
 
   -- | Similar to Mark Tullsen's First Class Patterns paper
   (:->) :: (DSL ADT s) => Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
-  (:|) :: (Either a b --> r) -> (Either a b --> r) -> (Either a b --> r)
+  (:|) :: (IsCanonical a, IsCanonical b, IsCanonical (Either a b)) => (Either a b --> r) -> (Either a b --> r) -> (Either a b --> r)
 
   Apply :: (a --> b) -> ADT a -> ADT b
 
