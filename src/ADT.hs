@@ -10,6 +10,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 import           Control.Applicative
 import           Data.Kind
@@ -19,33 +20,43 @@ import           GHC.Generics
 import           ERep
 import           Pattern
 
-data Match s t
+-- data Match s t where
+--   (:-->) :: (DSL ADT a, DSL ADT b, DSL ADT r) =>
+--     Pattern ADT (ADT s) t -> (t -> ADT r) -> 
 
-data ADT t where
-  Lit :: Int -> ADT Int
-  Add :: ADT Int -> ADT Int -> ADT Int
+data ADT f t where
+  Base :: f a -> ADT f a
+  Unit' :: ADT f ()
+  Pair' :: forall f a b. ADT f a -> ADT f b -> ADT f (a, b)
+  InL' :: forall f a b. ADT f a -> ADT f (Either a b)
+  InR' :: forall f a b. ADT f b -> ADT f (Either a b)
 
-  Unit :: ADT ()
-  Pair :: forall a b. ADT a -> ADT b -> ADT (a, b)
-  InL :: forall a b. ADT a -> ADT (Either a b)
-  InR :: forall a b. ADT b -> ADT (Either a b)
+pattern Unit = ADT Unit'
+pattern Pair x y = ADT (Pair' x y)
+pattern InL x = ADT (InL' x)
+pattern InR y = ADT (InR' y)
+
+data E t where
+  Lit :: Int -> E Int
+  Add :: E Int -> E Int -> E Int
+  ADT :: ADT E t -> E t
 
   -- | Similar to Mark Tullsen's First Class Patterns paper
-  (:->) :: (DSL ADT s, DSL ADT r, IsCanonical s) =>
-    Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT (PatFn s r)
+  (:->) :: (DSL E s, DSL E r, IsCanonical s) =>
+    Pattern E (E s) t -> (t -> E r) -> E (PatFn s r)
 
-  (:|) :: (DSL ADT a, DSL ADT b, DSL ADT r) =>
+  (:|) :: (DSL E a, DSL E b, DSL E r) =>
     ((Either a b) --> r) -> ((Either a b) --> r) -> ((Either a b) --> r)
 
-  Apply :: ERep a => (ERepTy a --> b) -> ADT a -> ADT b
+  Apply :: ERep a => (ERepTy a --> b) -> E a -> E b
 
-  Nil :: ADT [a]
-  Cons :: ADT a -> ADT [a] -> ADT [a]
+  Nil :: E [a]
+  Cons :: E a -> E [a] -> E [a]
 
-  Rec :: ERepTy a ~ a => ((ERepTy a --> b) -> (ERepTy a --> b)) -> ADT (PatFn a b)
+  Rec :: ERepTy a ~ a => ((ERepTy a --> b) -> (ERepTy a --> b)) -> E (PatFn a b)
 
 -- type x --> y = ADT (PatFn (ERepTy x) y)
-type x --> y = ADT (PatFn x y)
+type x --> y = E (PatFn x y)
 
 -- TODO: Look into using Template Haskell to automatically generate pattern
 -- synonyms like these
@@ -54,30 +65,53 @@ pattern ConsPat = CompPat InRPat PairPat
 
 class ERep t => DSL f t where
   toDSL :: ERepTy t -> f t
-  dslEmbed :: f t -> f (ERepTy t)
+  dslEmbed :: f t -> ADT f (ERepTy t)
 
-  default dslEmbed :: ERepTy t ~ t => f t -> f (ERepTy t)
-  dslEmbed = id
+  default dslEmbed :: ERepTy t ~ t => f t -> ADT f (ERepTy t)
+  dslEmbed = Base
 
-instance DSL ADT Int where
+instance ERep (ADT f a) where
+  type ERepTy (ADT f a) = ADT f a
+  rep = id
+  unrep = id
+
+instance DSL E Int where
   toDSL = Lit
 
-instance DSL ADT () where
-  toDSL _ = Unit
+instance DSL (ADT f) () where
+  toDSL _ = Unit'
 
-instance (DSL ADT a, DSL ADT b) => DSL ADT (a, b) where
-  toDSL (x, y) = Pair (toDSL (rep x)) (toDSL (rep y))
+instance (DSL f a, DSL f b, DSL (ADT f) a, DSL (ADT f) b) => DSL (ADT f) (a, b) where
+  toDSL (x, y) = Pair' (toDSL (rep x)) (toDSL (rep y))
 
-instance (DSL ADT a, DSL ADT b) => DSL ADT (Either a b) where
-  toDSL (Left x)  = InL (toDSL (rep x))
-  toDSL (Right y) = InR (toDSL (rep y))
+instance (DSL f a, DSL f b, DSL (ADT f) a, DSL (ADT f) b) => DSL (ADT f) (Either a b) where
+  toDSL (Left x)  = InL' (toDSL (rep x))
+  toDSL (Right y) = InR' (toDSL (rep y))
 
-instance (DSL ADT a, ERep a) => DSL ADT [a] where
+-- instance {- (DSL f a) => -} ERep a => DSL (ADT E) [a] where
+--   dslEmbed (Base Nil) = dslEmbed Nil
+--     -- case 
+
+instance (DSL f Int) => DSL (ADT f) Int where
+  dslEmbed = undefined
+
+----
+instance DSL E () where
+  toDSL = ADT . toDSL
+
+instance (DSL (ADT E) a, DSL (ADT E) b, DSL E a, DSL E b) => DSL E (a, b) where
+  toDSL = ADT . toDSL
+
+instance (DSL (ADT E) a, DSL (ADT E) b, DSL E a, DSL E b) => DSL E (Either a b) where
+  toDSL = ADT . toDSL
+
+
+instance (DSL E a, ERep a) => DSL E [a] where
   toDSL (Left ())       = Nil
   toDSL (Right (x, xs)) = Cons (toDSL (rep x)) (toDSL (rep xs))
 
-  dslEmbed Nil = InL Unit
-  dslEmbed (Cons x xs) = InR (Pair x xs)
+  dslEmbed Nil = InL' Unit'
+  dslEmbed (Cons x xs) = InR' (Pair' x xs)
 
 adtSum :: ERepTy [Int] --> Int
 adtSum = Rec $ \rec ->
@@ -89,6 +123,7 @@ listToInt =
   (NilPat  :-> \()    -> Lit 0) :|
   (ConsPat :-> \(_,_) -> Lit 1)
 
+{-
 fromPattern :: Pattern ADT (ADT s) t -> ADT s -> Maybe t
 fromPattern BasePat arg = Just $ eval arg
 fromPattern PairPat (Pair x y) = Just (x, y)
@@ -136,4 +171,4 @@ testList = Cons (Lit 1) (Cons (Lit 2) (Cons (Lit 3) Nil))
 -- TODO: Use this type to test things out
 data Three a = Three a a a deriving (Generic)
 instance ERep a => ERep (Three a)
-
+-}
