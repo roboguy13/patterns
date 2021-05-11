@@ -43,7 +43,7 @@ data E t where
 
   -- | Similar to Mark Tullsen's First Class Patterns paper
   (:->) :: (DSL E s, DSL E r, IsCanonical s) =>
-    Pattern E (E s) t -> (t -> E r) -> E (PatFn s r)
+    Pattern ADT E (E s) t -> (t -> E r) -> E (PatFn s r)
 
   (:|) :: (DSL E a, DSL E b, DSL E r) =>
     ((Either a b) --> r) -> ((Either a b) --> r) -> ((Either a b) --> r)
@@ -65,10 +65,11 @@ pattern ConsPat = CompPat InRPat PairPat
 
 class ERep t => DSL f t where
   toDSL :: ERepTy t -> f t
-  dslEmbed :: f t -> ADT f (ERepTy t)
 
-  default dslEmbed :: ERepTy t ~ t => f t -> ADT f (ERepTy t)
-  dslEmbed = Base
+  -- dslEmbed :: f t -> ADT f (ERepTy t)
+
+  -- default dslEmbed :: ERepTy t ~ t => f t -> ADT f (ERepTy t)
+  -- dslEmbed = Base
 
 instance ERep (ADT f a) where
   type ERepTy (ADT f a) = ADT f a
@@ -92,8 +93,9 @@ instance (DSL f a, DSL f b, DSL (ADT f) a, DSL (ADT f) b) => DSL (ADT f) (Either
 --   dslEmbed (Base Nil) = dslEmbed Nil
 --     -- case 
 
-instance (DSL f Int) => DSL (ADT f) Int where
-  dslEmbed = undefined
+instance {-# OVERLAPS #-} (DSL f a) => DSL (ADT f) a where
+  toDSL = Base . toDSL
+  -- dslEmbed = undefined --Base . _
 
 ----
 instance DSL E () where
@@ -110,8 +112,8 @@ instance (DSL E a, ERep a) => DSL E [a] where
   toDSL (Left ())       = Nil
   toDSL (Right (x, xs)) = Cons (toDSL (rep x)) (toDSL (rep xs))
 
-  dslEmbed Nil = InL' Unit'
-  dslEmbed (Cons x xs) = InR' (Pair' x xs)
+  -- dslEmbed Nil = InL' Unit'
+  -- dslEmbed (Cons x xs) = InR' (Pair' (Base x) (Base xs))
 
 adtSum :: ERepTy [Int] --> Int
 adtSum = Rec $ \rec ->
@@ -123,20 +125,19 @@ listToInt =
   (NilPat  :-> \()    -> Lit 0) :|
   (ConsPat :-> \(_,_) -> Lit 1)
 
-{-
-fromPattern :: Pattern ADT (ADT s) t -> ADT s -> Maybe t
-fromPattern BasePat arg = Just $ eval arg
-fromPattern PairPat (Pair x y) = Just (x, y)
-fromPattern InLPat  (InL x) = Just x
-fromPattern InRPat  (InR y) = Just y
+fromPattern :: Pattern ADT (ADT f) (ADT f s) t -> ADT f s -> Maybe t
+fromPattern BasePat arg@(Base x) = Just x
+fromPattern PairPat (Pair' x y) = Just (x, y)
+fromPattern InLPat  (InL' x) = Just x
+fromPattern InRPat  (InR' y) = Just y
 fromPattern (CompPat p q) arg = do
   x <- fromPattern p arg
   fromPattern q x
 fromPattern _ _ = Nothing
 
-matchPattern :: Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT s -> Maybe (ADT r)
-matchPattern pat f arg = f <$> fromPattern pat arg
-
+-- matchPattern :: Pattern ADT (ADT s) t -> (t -> ADT r) -> ADT s -> Maybe (ADT r)
+-- matchPattern pat f arg = f <$> fromPattern pat arg
+{-
 runMatch :: (DSL ADT a, DSL ADT b, IsCanonical a) => ADT (PatFn a b) -> ADT a -> Maybe b
 runMatch (pat :-> f) arg = eval <$> matchPattern pat f arg
 runMatch (p :| q) arg = runMatch p arg <|> runMatch q arg
