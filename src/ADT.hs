@@ -11,6 +11,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ViewPatterns #-}
 
 import           Control.Applicative
 import           Data.Kind
@@ -57,25 +58,55 @@ infixl 3 -|, |->
 type x -|  f = PatFnF f x
 type f |-> y = f y
 
-class Matchable f a where
-  patterns :: [SomePattern f (f (ERepTy a))]
-  match :: Match f (ERepTy a) b -> f a -> Maybe (f b)
+class Matchable f where
+  -- patterns :: [SomePattern f (f a)]
+  -- match :: Match f (ERepTy a) b -> f a -> Maybe (f b)
+  fromPattern :: Pattern f (f (ERepTy s)) t -> f s -> Maybe t
 
 -- TODO: See if Template Haskell can auto-generate these instances for
 -- a given list of constructors (in this case, Nil and Cons)
-instance Matchable E [a] where
-  patterns = [SomePattern NilPat, SomePattern ConsPat]
+instance Matchable E  where
+  -- patterns = [SomePattern NilPat, SomePattern ConsPat]
 
-  match (NilPat  :-> f) Nil = Just (f ())
-  match (ConsPat :-> f) (Cons x xs) = Just (f (x, xs))
-  match (p :| q) arg = match p arg <|> match q arg
-  match _ _ = Nothing
+  fromPattern NilPat Nil = Just ()
+  fromPattern ConsPat (Cons x xs) = Just (x, xs)
+  fromPattern _ _ = Nothing
 
-matchWith :: Matchable f a => f a -> Match f (ERepTy a) b -> Maybe (f b)
+  -- match (NilPat  :-> f) Nil = Just (f ())
+  -- match (ConsPat :-> f) (Cons x xs) = Just (f (x, xs))
+  -- match (p :| q) arg = match p arg <|> match q arg
+  -- match _ _ = Nothing
+
+
+matchPattern :: Matchable f => Pattern f (f (ERepTy s)) t -> (t -> f r) -> f s -> Maybe (f r)
+matchPattern pat f arg = f <$> fromPattern pat arg
+
+match :: Matchable f => Match f (ERepTy a) b -> f a -> Maybe (f b)
+match (pat :-> f) arg = matchPattern pat f arg
+match (p :| q) arg = match p arg <|> match q arg
+
+-- match' :: Match f (ERepTy a) b -> f a -> Maybe (f b)
+-- match' = undefined
+
+matchWith :: Matchable f => f a -> Match f (ERepTy a) b -> Maybe (f b)
 matchWith = flip match
 
-fromPattern :: Matchable f a => Pattern f (f (ERepTy a)) (f b) -> f a -> Maybe (f b)
-fromPattern p = match (p :-> id)
+-- fromPattern :: ERepTyIdem s => Pattern f (f (ERepTy s)) t -> f s -> Maybe t
+-- -- fromPattern BasePat x = _
+-- fromPattern PairPat (rep -> (x, y)) = undefined
+
+
+-- fromPattern BasePat arg@(Base x) = Just x
+-- fromPattern PairPat (Pair' x y) = Just (x, y)
+-- fromPattern InLPat  (InL' x) = Just x
+-- fromPattern InRPat  (InR' y) = Just y
+-- fromPattern (CompPat p q) arg = do
+--   x <- fromPattern p arg
+--   fromPattern q x
+-- fromPattern _ _ = Nothing
+
+-- fromPattern :: Matchable f a => Pattern f (f (ERepTy a)) (f b) -> f a -> Maybe (f b)
+-- fromPattern p = match (p :-> id)
 
 -- x -|f|-> y  =  (x -| f) |-> y
 --                (f (PatFn x)
