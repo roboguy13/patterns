@@ -20,46 +20,86 @@ import           GHC.Generics
 import           ERep
 import           Pattern
 
+import           Data.Constraint
+
 -- data Match s t where
 --   (:-->) :: (DSL ADT a, DSL ADT b, DSL ADT r) =>
 --     Pattern ADT (ADT s) t -> (t -> ADT r) -> 
 
-data ADT f t where
-  Base :: f a -> ADT f a
-  Unit' :: ADT f ()
-  Pair' :: forall f a b. ADT f a -> ADT f b -> ADT f (a, b)
-  InL' :: forall f a b. ADT f a -> ADT f (Either a b)
-  InR' :: forall f a b. ADT f b -> ADT f (Either a b)
+-- data ADT f t where
+--   Base :: f a -> ADT f a
+--   Unit' :: ADT f ()
+--   Pair' :: forall f a b. ADT f a -> ADT f b -> ADT f (a, b)
+--   InL' :: forall f a b. ADT f a -> ADT f (Either a b)
+--   InR' :: forall f a b. ADT f b -> ADT f (Either a b)
 
-pattern Unit = ADT Unit'
-pattern Pair x y = ADT (Pair' x y)
-pattern InL x = ADT (InL' x)
-pattern InR y = ADT (InR' y)
+-- pattern Unit = ADT Unit'
+-- pattern Pair x y = ADT (Pair' x y)
+-- pattern InL x = ADT (InL' x)
+-- pattern InR y = ADT (InR' y)
+
+
+-- TODO: Add a type class that keeps track of constructors and eliminators
+
+data Match f a b where
+  -- | Similar to Mark Tullsen's First Class Patterns paper
+  (:->) :: -- (DSL E s, DSL E r, IsCanonical s) =>
+    Pattern f (f s) t -> (t -> f r) -> Match f s r
+    -- Pattern f (f s) t -> (t -> f r) -> Match f (s --> r)
+
+  (:|) :: -- (DSL E a, DSL E b, DSL E r) =>
+    Match f (Either a b) r -> Match f (Either a b) r -> Match f (Either a b) r
+    -- (Either a b -|f|-> r) -> (Either a b -|f|-> r) -> Match f (Either a b --> r)
+
 
 data E t where
   Lit :: Int -> E Int
   Add :: E Int -> E Int -> E Int
-  ADT :: ADT E t -> E t
 
-  -- | Similar to Mark Tullsen's First Class Patterns paper
-  (:->) :: (DSL E s, DSL E r, IsCanonical s) =>
-    Pattern ADT E (E s) t -> (t -> E r) -> E (PatFn s r)
-
-  (:|) :: (DSL E a, DSL E b, DSL E r) =>
-    ((Either a b) --> r) -> ((Either a b) --> r) -> ((Either a b) --> r)
-
-  Apply :: ERep a => (ERepTy a --> b) -> E a -> E b
+  Apply :: ERep a => (ERepTy a -|E|-> b) -> E a -> E b
 
   Nil :: E [a]
   Cons :: E a -> E [a] -> E [a]
 
-  Rec :: ERepTy a ~ a => ((ERepTy a --> b) -> (ERepTy a --> b)) -> E (PatFn a b)
+  Rec :: ERepTy a ~ a => ((ERepTy a -|E|-> b) -> (ERepTy a -|E|-> b)) -> E (a --> b)
 
 -- type x --> y = ADT (PatFn (ERepTy x) y)
-type x --> y = E (PatFn x y)
+type x --> y = PatFn x y
+
+newtype PatFnF f x y = PatFnF { runPatFunF :: f (PatFn x y) }
+
+
+infixl 3 -|, |->
+type x -|  f = PatFnF f x
+type f |-> y = f y
+
+class Matchable f a where
+  patterns :: [SomePattern f (f (ERepTy a))]
+  match :: Match f (ERepTy a) b -> f a -> Maybe (f b)
+
+instance Matchable E [a] where
+  patterns = [SomePattern NilPat, SomePattern ConsPat]
+
+  match (NilPat  :-> f) Nil = Just (f ())
+  match (ConsPat :-> f) (Cons x xs) = Just (f (x, xs))
+  match (p :| q) arg = match p arg <|> match q arg
+  match _ _ = Nothing
+
+matchWith :: Matchable f a => f a -> Match f (ERepTy a) b -> Maybe (f b)
+matchWith = flip match
+
+fromPattern :: Matchable f a => Pattern f (f (ERepTy a)) (f b) -> f a -> Maybe (f b)
+fromPattern p = match (p :-> id)
+
+-- x -|f|-> y  =  (x -| f) |-> y
+--                (f (PatFn x)
 
 -- TODO: Look into using Template Haskell to automatically generate pattern
 -- synonyms like these
+-- pattern NilPat :: Pattern f (f (Either t b2)) t
+-- pattern NilPat :: Pattern E (E s) t1
+
+-- pattern NilPat :: Pattern f (f (Either t b2)) t
 pattern NilPat  = CompPat InLPat BasePat
 pattern ConsPat = CompPat InRPat PairPat
 
@@ -71,6 +111,10 @@ class ERep t => DSL f t where
   -- default dslEmbed :: ERepTy t ~ t => f t -> ADT f (ERepTy t)
   -- dslEmbed = Base
 
+
+
+
+{-
 instance ERep (ADT f a) where
   type ERepTy (ADT f a) = ADT f a
   rep = id
@@ -173,3 +217,6 @@ testList = Cons (Lit 1) (Cons (Lit 2) (Cons (Lit 3) Nil))
 data Three a = Three a a a deriving (Generic)
 instance ERep a => ERep (Three a)
 -}
+
+-}
+
