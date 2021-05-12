@@ -22,39 +22,22 @@ import           Pattern
 
 import           Data.Constraint
 
--- data Match s t where
---   (:-->) :: (DSL ADT a, DSL ADT b, DSL ADT r) =>
---     Pattern ADT (ADT s) t -> (t -> ADT r) -> 
-
--- data ADT f t where
---   Base :: f a -> ADT f a
---   Unit' :: ADT f ()
---   Pair' :: forall f a b. ADT f a -> ADT f b -> ADT f (a, b)
---   InL' :: forall f a b. ADT f a -> ADT f (Either a b)
---   InR' :: forall f a b. ADT f b -> ADT f (Either a b)
-
--- pattern Unit = ADT Unit'
--- pattern Pair x y = ADT (Pair' x y)
--- pattern InL x = ADT (InL' x)
--- pattern InR y = ADT (InR' y)
-
-
 -- TODO: Add a type class that keeps track of constructors and eliminators
 
 data Match f a b where
   -- | Similar to Mark Tullsen's First Class Patterns paper
-  (:->) :: -- (DSL E s, DSL E r, IsCanonical s) =>
+  (:->) ::
     Pattern f (f s) t -> (t -> f r) -> Match f s r
-    -- Pattern f (f s) t -> (t -> f r) -> Match f (s --> r)
 
-  (:|) :: -- (DSL E a, DSL E b, DSL E r) =>
+  (:|) ::
     Match f (Either a b) r -> Match f (Either a b) r -> Match f (Either a b) r
-    -- (Either a b -|f|-> r) -> (Either a b -|f|-> r) -> Match f (Either a b --> r)
 
 
 data E t where
   Lit :: Int -> E Int
   Add :: E Int -> E Int -> E Int
+
+  MatchE :: Match E (ERepTy a) b -> E (a --> b)
 
   Apply :: ERep a => (ERepTy a -|E|-> b) -> E a -> E b
 
@@ -63,7 +46,6 @@ data E t where
 
   Rec :: ERepTy a ~ a => ((ERepTy a -|E|-> b) -> (ERepTy a -|E|-> b)) -> E (a --> b)
 
--- type x --> y = ADT (PatFn (ERepTy x) y)
 type x --> y = PatFn x y
 
 newtype PatFnF f x y = PatFnF { runPatFunF :: f (PatFn x y) }
@@ -77,6 +59,8 @@ class Matchable f a where
   patterns :: [SomePattern f (f (ERepTy a))]
   match :: Match f (ERepTy a) b -> f a -> Maybe (f b)
 
+-- TODO: See if Template Haskell can auto-generate these instances for
+-- a given list of constructors (in this case, Nil and Cons)
 instance Matchable E [a] where
   patterns = [SomePattern NilPat, SomePattern ConsPat]
 
