@@ -59,8 +59,12 @@ type x -|  f = PatFnF f x
 type f |-> y = f y
 
 class Matchable f where
+    -- TODO: See if this list can be reasonably put into this typeclass.
+    -- This could be useful, since the collection of possible "simple" pattern of
+    -- a type is finite, so they can be enumerated. This could be useful in
+    -- some situations.
   -- patterns :: [SomePattern f (f a)]
-  -- match :: Match f (ERepTy a) b -> f a -> Maybe (f b)
+
   fromPattern :: Pattern f (f (ERepTy s)) t -> f s -> Maybe t
 
 -- TODO: See if Template Haskell can auto-generate these instances for
