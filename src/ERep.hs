@@ -3,6 +3,8 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module ERep where
 
