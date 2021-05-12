@@ -51,6 +51,8 @@ type x --> y = PatFn x y
 newtype PatFnF f x y = PatFnF { runPatFunF :: f (PatFn x y) }
 
 
+-- Similar to "ternary" type-level operators used by Edward Kmett and
+-- Iceland Jack
 infixl 3 -|, |->
 type x -|  f = PatFnF f x
 type f |-> y = f y
