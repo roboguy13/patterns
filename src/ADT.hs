@@ -12,6 +12,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeOperators #-}
 
 import           Control.Applicative
 import           Data.Kind
