@@ -55,6 +55,3 @@ instance {-# OVERLAPPABLE #-} GetPatterns f a where
 getPatterns :: forall f a. (GetPatterns f (ERepTy a), ERep a) => [SomePattern f (f (ERepTy a))]
 getPatterns = getPatterns'
 
--- liftPattern :: Pattern f (f (ERepTy s)) t -> Pattern f (f s) t
--- liftPattern BasePat = BasePat
-
