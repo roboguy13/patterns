@@ -38,19 +38,33 @@ data E t where
   Lit :: Int -> E Int
   Add :: E Int -> E Int -> E Int
 
-  MatchE :: Match E (ERepTy a) b -> E (a --> b)
+  MatchE :: E a -> Match E (ERepTy a) b -> E b
 
-  Apply :: ERep a => (ERepTy a -|E|-> b) -> E a -> E b
+  Apply :: E (a -> b) -> E a -> E b
+  Lam :: Value E a => (E a -> E b) -> E (a -> b)
 
   Nil :: E [a]
   Cons :: E a -> E [a] -> E [a]
 
-  Rec :: ERepTy a ~ a => ((ERepTy a -|E|-> b) -> (ERepTy a -|E|-> b)) -> E (a --> b)
+  Rec :: (E (a -> b) -> E (a -> b)) -> E (a -> b)
+  -- Rec :: ERepTy a ~ a => ((ERepTy a -|E|-> b) -> (ERepTy a -|E|-> b)) -> E (a --> b)
+
+pattern NilPat  = CompPat InLPat BasePat
+pattern ConsPat = CompPat InRPat PairPat
 
 type x --> y = PatFn x y
 
 newtype PatFnF f x y = PatFnF { runPatFunF :: f (PatFn x y) }
 
+class Value f a where
+  value :: a -> f a
+
+instance Value E Int where
+  value = Lit
+
+instance Value E a => Value E [a] where
+  value [] = Nil
+  value (x:xs) = Cons (value x) $ value xs
 
 -- Similar to "ternary" type-level operators used by Edward Kmett and
 -- Iceland Jack
@@ -87,13 +101,33 @@ matchPattern pat f arg = f <$> fromPattern pat arg
 
 match :: Matchable f => Match f (ERepTy a) b -> f a -> Maybe (f b)
 match (pat :-> f) arg = matchPattern pat f arg
-match (p :| q) arg = match p arg <|> match q arg
+match (p :| q)    arg = match p arg <|> match q arg
 
 -- match' :: Match f (ERepTy a) b -> f a -> Maybe (f b)
 -- match' = undefined
 
 matchWith :: Matchable f => f a -> Match f (ERepTy a) b -> Maybe (f b)
 matchWith = flip match
+
+adtSum :: E ([Int] -> Int)
+adtSum = Rec $ \rec ->
+  Lam $ \x ->
+    MatchE x $
+      (NilPat  :-> \()      -> Lit 0) :|
+      (ConsPat :-> \(x, xs) -> Add x (Apply rec xs))
+
+eval :: E t -> t
+eval (Lit x) = x
+eval (Add x y) = eval x + eval y
+eval (Lam f) = eval . f . value
+eval (Apply f x) = eval f (eval x)
+eval Nil = []
+eval (Cons x xs) = eval x : eval xs
+eval (MatchE x m) =
+  case match m x of
+    Nothing -> error "eval: Non-exhaustive match in EDSL code"
+    Just r -> eval r
+eval rec@(Rec f) = eval $ f rec
 
 -- fromPattern :: ERepTyIdem s => Pattern f (f (ERepTy s)) t -> f s -> Maybe t
 -- -- fromPattern BasePat x = _
@@ -121,8 +155,6 @@ matchWith = flip match
 -- pattern NilPat :: Pattern E (E s) t1
 
 -- pattern NilPat :: Pattern f (f (Either t b2)) t
-pattern NilPat  = CompPat InLPat BasePat
-pattern ConsPat = CompPat InRPat PairPat
 
 class ERep t => DSL f t where
   toDSL :: ERepTy t -> f t
