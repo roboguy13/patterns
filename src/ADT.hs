@@ -26,7 +26,6 @@ import           Data.Constraint
 
 -- TODO: Add a type class that keeps track of constructors and eliminators
 
-type family EDSL_Pat (t :: Type -> Type) :: Type -> Type -> Type
 
 data Match f a b where
   -- | Similar to Mark Tullsen's First Class Patterns paper
@@ -55,7 +54,6 @@ data E_Pat s t where
   Nil_Pat  :: E_Pat (E (Either () (a, [a]))) ()
   Cons_Pat :: E_Pat (E (Either () (a, [a]))) (E a, E [a])
 
-type instance EDSL_Pat E = E_Pat
 
 -- instance ERep a => ERep (E a)
 
@@ -80,6 +78,8 @@ instance Value E a => Value E [a] where
   value (x:xs) = Cons (value x) $ value xs
 
 class Matchable f where
+  type EDSL_Pat f :: Type -> Type -> Type
+
     -- TODO: See if this list can be reasonably put into this typeclass.
     -- This could be useful, since the collection of possible "simple" pattern of
     -- a type is finite, so they can be enumerated. This could be useful in
@@ -91,6 +91,7 @@ class Matchable f where
 -- TODO: See if Template Haskell can auto-generate these instances for
 -- a given list of constructors (in this case, Nil and Cons)
 instance Matchable E  where
+  type EDSL_Pat E = E_Pat
   patterns = [SomePattern NilPat, SomePattern ConsPat]
 
   fromPattern NilPat Nil = Just ()
