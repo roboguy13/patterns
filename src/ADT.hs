@@ -50,8 +50,8 @@ data E t where
   Rec :: (E (a -> b) -> E (a -> b)) -> E (a -> b)
 
 data E_Pat s t where
-  Nil_Pat :: E_Pat (E [a]) ()
-  Cons_Pat :: E_Pat (E [a]) (E a, E [a])
+  Nil_Pat  :: E_Pat (E (Either () (a, [a]))) ()
+  Cons_Pat :: E_Pat (E (Either () (a, [a]))) (E a, E [a])
 
 -- instance ERep a => ERep (E a)
 
