@@ -26,10 +26,12 @@ import           Data.Constraint
 
 -- TODO: Add a type class that keeps track of constructors and eliminators
 
+type family EDSL_Pat (t :: Type -> Type) :: Type -> Type -> Type
+
 data Match f a b where
   -- | Similar to Mark Tullsen's First Class Patterns paper
   (:->) ::
-    Pattern f (f s) t -> (t -> f r) -> Match f s r
+    EDSL_Pat f (f s) t -> (t -> f r) -> Match f s r
 
   (:|) ::
     Match f (Either a b) r -> Match f (Either a b) r -> Match f (Either a b) r
@@ -52,6 +54,8 @@ data E t where
 data E_Pat s t where
   Nil_Pat  :: E_Pat (E (Either () (a, [a]))) ()
   Cons_Pat :: E_Pat (E (Either () (a, [a]))) (E a, E [a])
+
+type instance EDSL_Pat E = E_Pat
 
 -- instance ERep a => ERep (E a)
 
