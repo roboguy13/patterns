@@ -49,6 +49,19 @@ data E t where
 
   Rec :: (E (a -> b) -> E (a -> b)) -> E (a -> b)
 
+data E_Pat s t where
+  Nil_Pat :: E_Pat [a] ()
+  Cons_Pat :: E_Pat [a] (a, [a])
+
+-- instance ERep a => ERep (E a)
+
+-- nilPat :: Pattern E (E (Either () t)) ()
+-- nilPat = CompPat InLPat BasePat
+
+-- consPat :: Pattern E (E (Either () (a, [a]))) (E a, E [a])
+-- consPat = CompPat InRPat PairPat
+
+-- NilPat :: Pattern f (f (Either t b2)) t
 pattern NilPat  = CompPat InLPat BasePat
 pattern ConsPat = CompPat InRPat PairPat
 
