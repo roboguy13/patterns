@@ -67,14 +67,14 @@ class Matchable f where
     -- This could be useful, since the collection of possible "simple" pattern of
     -- a type is finite, so they can be enumerated. This could be useful in
     -- some situations.
-  -- patterns :: [SomePattern f (f a)]
+  patterns :: [SomePattern f]
 
   fromPattern :: Pattern f (f (ERepTy s)) t -> f s -> Maybe t
 
 -- TODO: See if Template Haskell can auto-generate these instances for
 -- a given list of constructors (in this case, Nil and Cons)
 instance Matchable E  where
-  -- patterns = [SomePattern NilPat, SomePattern ConsPat]
+  patterns = [SomePattern NilPat, SomePattern ConsPat]
 
   fromPattern NilPat Nil = Just ()
   fromPattern ConsPat (Cons x xs) = Just (x, xs)

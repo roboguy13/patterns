@@ -25,6 +25,9 @@ data Pattern f s t where
   CompPat :: Pattern f a (f b) -> Pattern f (f b) c -> Pattern f a c
   -- MatchRec :: ... ?
 
+data SomePattern f = forall s t. SomePattern (Pattern f (f s) t)
+
+{-
 data SomePattern f s = forall t. SomePattern (Pattern f s t)
 
 someInLPat :: forall f a b. SomePattern f (f a) -> SomePattern f (f (Either a b))
@@ -54,4 +57,5 @@ instance {-# OVERLAPPABLE #-} GetPatterns f a where
 
 getPatterns :: forall f a. (GetPatterns f (ERepTy a), ERep a) => [SomePattern f (f (ERepTy a))]
 getPatterns = getPatterns'
+-}
 
